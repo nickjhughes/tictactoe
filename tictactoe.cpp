@@ -2,13 +2,7 @@
 #include <map>
 #include <random>
 #include <vector>
-
-/*
-TODO:
-    - Masks for checking for wins/full board
-    - Optimal move generation
-    - Auto-play
-*/
+#include <chrono>
 
 /*
 Game state is stored in a 32 bit integer:
@@ -107,6 +101,16 @@ bool board_full(const state_t &state) {
     return num_symbols(state) == 9;
 }
 
+vector<position_t> get_empty_squares(const state_t &state) {
+    vector<position_t> empty_squares;
+    for (position_t pos = 0; pos < 9; ++pos) {
+        if (get_pos(state, pos) == empty) {
+            empty_squares.push_back(pos);
+        }
+    }
+    return empty_squares;
+}
+
 symbol_t game_over(const state_t &state) {
     for (char row = 0; row < 3; ++row) {
         symbol_t winner = check_row(state, row);
@@ -155,10 +159,8 @@ void enumerate_moves(const state_t &state) {
     
     position_t best_pos;
     value_t best_value = -2;
-    for (position_t pos = 0; pos < 9; ++pos) {
-        if (get_pos(state, pos) != empty) {
-            continue;
-        }
+    auto empty_squares = get_empty_squares(state);
+    for(auto const& pos: empty_squares) {
         state_t new_state = state;
         set_pos(new_state, pos, whose_turn(new_state));
         swap_turn(new_state);
@@ -175,12 +177,7 @@ void enumerate_moves(const state_t &state) {
 }
 
 void take_random_turn(state_t &state) {
-    vector<position_t> empty_squares;
-    for (position_t pos = 0; pos < 9; ++pos) {
-        if (get_pos(state, pos) == empty) {
-            empty_squares.push_back(pos);
-        }
-    }
+    auto empty_squares = get_empty_squares(state);
     random_device rd;
     mt19937 gen(rd());
     uniform_int_distribution<> dis(0, empty_squares.size() - 1);
@@ -215,7 +212,6 @@ symbol_t play_game(bool print) {
     state_t state;
     reset_state(state);
     while (game_over(state) == 0) {
-        // take_random_turn(state);
         take_optimal_turn(state);
         swap_turn(state);
         if (print) {
@@ -234,15 +230,33 @@ symbol_t play_game(bool print) {
     return game_over(state);
 }
 
-int main() {
-    // symbol_t winner = play_game(true);
-
+void learn() {
     state_t state;
     reset_state(state);
     enumerate_moves(state);
-    symbol_t winner = play_game(true);
+}
 
-    cout << to_string(optimal_moves.size()) << endl;
-    
+void profile() {
+    const int num_games = 10000;
+    auto t1 = chrono::high_resolution_clock::now();
+    for (int i = 0; i < num_games; ++i) {
+        state_t state;
+        reset_state(state);
+        symbol_t winner = play_game(false);
+        if (winner != x && winner != both) {
+            cout << "Noughts won!" << endl;
+        }
+    }
+    auto t2 = chrono::high_resolution_clock::now();
+    auto dt = chrono::duration_cast<chrono::milliseconds>(t2-t1).count();
+    cout << to_string(num_games) << " took " << dt << " milliseconds" << endl;
+    cout << to_string(1000 * num_games / dt) << " games per second" << endl;
+}
+
+int main() {
+    learn();
+    profile();
+    play_game(true);
+
     return 0;
 }
